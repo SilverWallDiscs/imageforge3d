@@ -36,7 +36,7 @@ jobs:
           if (($encoded.Length % 4) -ne 0) {
             throw "Base64 package length is not divisible by 4."
           }
-          $archive = Join-Path $env:RUNNER_TEMP "ImageForge3D-v0.1.3-Windows.zip"
+          $archive = Join-Path $env:RUNNER_TEMP "ImageForge3D-v0.1.4-Windows.zip"
           [IO.File]::WriteAllBytes($archive, [Convert]::FromBase64String($encoded))
           $packageRoot = Join-Path $env:RUNNER_TEMP "imageforge3d-package"
           Expand-Archive -LiteralPath $archive -DestinationPath $packageRoot -Force
@@ -52,14 +52,26 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Apply ImageIO runtime fix and rebuild v0.1.4 package
+        shell: pwsh
+        run: |
+          python tools/apply_imageio_fix.py "$env:IMAGEFORGE_PROJECT"
+          if ($LASTEXITCODE -ne 0) { throw "No se pudo aplicar el parche ImageIO." }
+          Compress-Archive -Path $env:IMAGEFORGE_PROJECT -DestinationPath $env:IMAGEFORGE_ARCHIVE -CompressionLevel Optimal -Force
+
       - name: Install pinned UI dependencies
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           Set-Location $env:IMAGEFORGE_PROJECT
           python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw "No se pudo actualizar pip." }
           python -m pip install -r requirements-ui.txt
+          if ($LASTEXITCODE -ne 0) { throw "No se pudieron instalar las dependencias UI." }
           python patch_gradio_client.py
+          if ($LASTEXITCODE -ne 0) { throw "Fallo la verificacion del parche Gradio." }
           python -m pip check
+          if ($LASTEXITCODE -ne 0) { throw "pip check detecto dependencias incompatibles." }
 
       - name: Compile project and smoke-test the real Gradio app
         shell: pwsh
@@ -70,14 +82,17 @@ jobs:
           GRADIO_ANALYTICS_ENABLED: "False"
           HF_HUB_DISABLE_TELEMETRY: "1"
         run: |
+          $ErrorActionPreference = "Stop"
           Set-Location $env:IMAGEFORGE_PROJECT
           python -m compileall -q app.py patch_gradio_client.py repair_triposr_mesh.py tests
+          if ($LASTEXITCODE -ne 0) { throw "La compilacion Python fallo." }
           python tests/smoke_test.py
+          if ($LASTEXITCODE -ne 0) { throw "El smoke test de la aplicacion fallo." }
 
       - name: Upload tested Windows package
         uses: actions/upload-artifact@v4
         with:
-          name: ImageForge3D-v0.1.3-Windows
-          path: ${{ runner.temp }}\ImageForge3D-v0.1.3-Windows.zip
+          name: ImageForge3D-v0.1.4-Windows
+          path: ${{ runner.temp }}\ImageForge3D-v0.1.4-Windows.zip
           if-no-files-found: error
           retention-days: 14
