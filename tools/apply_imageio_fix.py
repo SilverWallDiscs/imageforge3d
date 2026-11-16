@@ -80,6 +80,18 @@ def main() -> int:
     )
 
     replace_once(
+        root / "patch_gradio_client.py",
+        "        from gradio_client.utils import _json_schema_to_python_type\\n"
+        "        assert _json_schema_to_python_type(True, None) == \\"Any\\"\\n"
+        "        assert _json_schema_to_python_type(False, None) == \\"None\\"",
+        "        import importlib\\n"
+        "        import gradio_client.utils as utils\\n"
+        "        utils = importlib.reload(utils)\\n"
+        "        assert utils._json_schema_to_python_type(True, None) == \\"Any\\"\\n"
+        "        assert utils._json_schema_to_python_type(False, None) == \\"None\\"",
+    )
+
+    replace_once(
         root / "app.py",
         '        if "torchmcubes" in detail.lower() or "mcubes" in detail.lower():\n',
         '        if "no module named \'imageio\'" in detail.lower():\n'
