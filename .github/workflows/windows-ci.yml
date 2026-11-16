@@ -56,16 +56,22 @@ jobs:
         shell: pwsh
         run: |
           python tools/apply_imageio_fix.py "$env:IMAGEFORGE_PROJECT"
+          if ($LASTEXITCODE -ne 0) { throw "No se pudo aplicar el parche ImageIO." }
           Compress-Archive -Path $env:IMAGEFORGE_PROJECT -DestinationPath $env:IMAGEFORGE_ARCHIVE -CompressionLevel Optimal -Force
 
       - name: Install pinned UI dependencies
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           Set-Location $env:IMAGEFORGE_PROJECT
           python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw "No se pudo actualizar pip." }
           python -m pip install -r requirements-ui.txt
+          if ($LASTEXITCODE -ne 0) { throw "No se pudieron instalar las dependencias UI." }
           python patch_gradio_client.py
+          if ($LASTEXITCODE -ne 0) { throw "Fallo la verificacion del parche Gradio." }
           python -m pip check
+          if ($LASTEXITCODE -ne 0) { throw "pip check detecto dependencias incompatibles." }
 
       - name: Compile project and smoke-test the real Gradio app
         shell: pwsh
@@ -76,9 +82,12 @@ jobs:
           GRADIO_ANALYTICS_ENABLED: "False"
           HF_HUB_DISABLE_TELEMETRY: "1"
         run: |
+          $ErrorActionPreference = "Stop"
           Set-Location $env:IMAGEFORGE_PROJECT
           python -m compileall -q app.py patch_gradio_client.py repair_triposr_mesh.py tests
+          if ($LASTEXITCODE -ne 0) { throw "La compilacion Python fallo." }
           python tests/smoke_test.py
+          if ($LASTEXITCODE -ne 0) { throw "El smoke test de la aplicacion fallo." }
 
       - name: Upload tested Windows package
         uses: actions/upload-artifact@v4
